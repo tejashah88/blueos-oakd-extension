@@ -1,11 +1,12 @@
-import requests
-import time
 import pprint
+import time
+import requests
 
 streams =  {
-  "depth": "Oak-D Stereo Disparity",
-  "rgb": "Oak-D RGB"
+    "depth": "Oak-D Stereo Disparity",
+    "rgb": "Oak-D RGB"
 }
+
 mcm_endpoint = "http://127.0.0.1:6020/streams"
 
 def has_oak_stream(current_streams, name):
@@ -14,35 +15,38 @@ def has_oak_stream(current_streams, name):
             return True
     return False
 
+
 def add_mcm_stream(endpoint):
     name = streams[endpoint]
     new_stream = {
-    "name": name,
-    "source": "Redirect",
-    "stream_information": {
-        "endpoints": [
-        f"rtsp://127.0.0.1:8554/{endpoint}"
-        ],
-        "configuration": {
-        "type": "redirect"
-        },
-        "extended_configuration": {
-        "thermal": False,
-        "disable_mavlink": True
+        "name": name,
+        "source": "Redirect",
+        "stream_information": {
+            "endpoints": [
+                f"rtsp://127.0.0.1:8554/{endpoint}"
+            ],
+            "configuration": {
+                "type": "redirect"
+            },
+            "extended_configuration": {
+                "thermal": False,
+                "disable_mavlink": True
+            }
         }
     }
-    }
+
     print(f"adding stream {endpoint}")
-    pprint.pprint(requests.post(mcm_endpoint, json=new_stream).text)
+    stream_add_response = requests.post(mcm_endpoint, json=new_stream)
+    pprint.pprint(stream_add_response.text)
+
 
 def check_streams():
     while True:
         time.sleep(4)
         current_streams = requests.get(mcm_endpoint).json()
         for endpoint, name in streams.items():
-          print(name)
-          try:
-              if not has_oak_stream(current_streams, name):
-                  add_mcm_stream(endpoint)
-          except Exception as error:
-              print(error)
+            try:
+                if not has_oak_stream(current_streams, name):
+                    add_mcm_stream(endpoint)
+            except Exception as ex:
+                print(ex)

@@ -1,13 +1,22 @@
-FROM luxonis/depthai-library
+FROM luxonis/depthai-library:latest
 
-RUN apt update && apt install -y libgirepository1.0-dev gstreamer1.0-plugins-base libopenblas-dev gir1.2-gst-rtsp-server-1.0 python3-gi
+RUN apt-get update && \
+    apt-get install -y \
+        libgirepository1.0-dev \
+        gstreamer1.0-plugins-base \
+        libopenblas-dev \
+        gir1.2-gst-rtsp-server-1.0 \
+        python3-gi
 
-RUN apt install -y ninja-build && pip install numpy PyGObject requests && apt auto-remove -y ninja-build
-
+RUN apt-get install -y ninja-build && \
+    pip install numpy PyGObject requests && \
+    apt-get auto-remove -y ninja-build
 
 RUN git clone --depth 1 https://github.com/luxonis/depthai-experiments.git
+
 COPY src /src
-entrypoint python /src/stream.py
+
+ENTRYPOINT ["python", "/src/stream.py"]
 
 LABEL version="1.0.0"
 LABEL permissions='\
@@ -27,19 +36,19 @@ LABEL permissions='\
 
 LABEL authors='[\
     {\
-        "name": "Willian Galvani",\
-        "email": "willian@bluerobotics.com"\
+        "name": "Tejas Shah",\
+        "email": "tbshah@csuchico.edu"\
     }\
 ]'
 LABEL company='{\
-        "about": "",\
-        "name": "Blue Robotics",\
-        "email": "support@bluerobotics.com"\
+        "about": "American Institute of Mechatronics Engineers",\
+        "name": "AIME - MATE ROV",\
+        "email": "tbshah@csuchico.edu"\
     }'
 LABEL type="example"
-LABEL readme='https://raw.githubusercontent.com/Williangalvani/Oakd-extension/{tag}/Readme.md'
+LABEL readme='https://raw.githubusercontent.com/tejashah88/blueos-oakd-extension/{tag}/Readme.md'
 LABEL links='{\
-        "website": "https://github.com/Williangalvani/Oakd-extension/",\
-        "support": "https://github.com/Williangalvani/Oakd-extension/"\
+        "website": "https://github.com/tejashah88/blueos-oakd-extension/",\
+        "support": "https://github.com/tejashah88/blueos-oakd-extension/"\
     }'
 LABEL requirements="core >= 1.1"
