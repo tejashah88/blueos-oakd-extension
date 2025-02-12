@@ -13,13 +13,11 @@ gi.require_version('GstRtspServer', '1.0')
 from gi.repository import Gst, GstRtspServer, GLib, GstRtsp
 
 from register_stream import check_streams
-from video_pipeline import build_pipeline
+from oakd_pipeline import build_processing_pipeline
+from gstreamer_pipelines import RECEIVE_VIDEO_DATA_PIPELINE, UPLOAD_VIDEO_DATA_PIPELINE
 
-socket_rgb_path = "/tmp/socketrgb"
-socket_depth_path = "/tmp/socketdepth"
-
-receive_pipeline = "shmsrc is-live=true socket-path={} do-timestamp=true ! application/x-rtp,media=video,clock-rate=90000,encoding-name=H264 ! rtph264depay ! h264parse config-interval=1 ! queue leaky=upstream ! rtph264pay name=pay0 pt=96"
-app_pipeline = "appsrc name=source do-timestamp=true is-live=true format=time ! h264parse ! queue leaky=downstream ! rtph264pay config-interval=1 pt=96 ! shmsink wait-for-connection=false sync=true socket-path={}"
+SOCKET_RGB_PATH = "/tmp/socketrgb"
+SOCKET_DEPTH_PATH = "/tmp/socketdepth"
 
 
 class RtspSystem(GstRtspServer.RTSPMediaFactory):
@@ -27,8 +25,8 @@ class RtspSystem(GstRtspServer.RTSPMediaFactory):
         super(RtspSystem, self).__init__(**properties)
 
     def start(self):
-        t = threading.Thread(target=self._thread_rtsp)
-        t.start()
+        self.system_thread = threading.Thread(target=self._thread_rtsp)
+        self.system_thread.start()
 
     def _thread_rtsp(self):
         loop = GLib.MainLoop()
@@ -38,9 +36,9 @@ class RtspSystem(GstRtspServer.RTSPMediaFactory):
     def do_create_element(self, url):
         name = url.abspath.split('/')[-1]
         if name == 'rgb':
-            return Gst.parse_launch(receive_pipeline.format(socket_rgb_path))
+            return Gst.parse_launch(RECEIVE_VIDEO_DATA_PIPELINE.format(SOCKET_RGB_PATH))
         elif name == 'depth':
-            return Gst.parse_launch(receive_pipeline.format(socket_depth_path))
+            return Gst.parse_launch(RECEIVE_VIDEO_DATA_PIPELINE.format(SOCKET_DEPTH_PATH))
         else:
             pass
 
@@ -59,7 +57,7 @@ class RTSPServer(GstRtspServer.RTSPServer):
         self.appsrc = {}
         Gst.init(None)
 
-        for rtsp in [(self.rgb_rtsp, 'rgb', socket_rgb_path), (self.depth_rtsp, 'depth', socket_depth_path)]:
+        for rtsp in [(self.rgb_rtsp, 'rgb', SOCKET_RGB_PATH), (self.depth_rtsp, 'depth', SOCKET_DEPTH_PATH)]:
             rtsp, name, socket = rtsp
             rtsp.set_shared(True)
             rtsp.start()
@@ -69,8 +67,8 @@ class RTSPServer(GstRtspServer.RTSPServer):
         self.attach(None)
 
         # MCM thread
-        t2 = threading.Thread(target=check_streams)
-        t2.start()
+        self.mcm_thread = threading.Thread(target=check_streams)
+        self.mcm_thread.start()
         GLib.timeout_add_seconds(2, self.timeout)
 
     def timeout(self):
@@ -85,28 +83,27 @@ class RTSPServer(GstRtspServer.RTSPServer):
 
 
     def start_app_pipeline(self, file):
-        launch_str = app_pipeline.format(file)
+        launch_str = UPLOAD_VIDEO_DATA_PIPELINE.format(file)
         print(launch_str)
         pipeline = Gst.parse_launch(launch_str)
         pipeline.set_state(Gst.State.PLAYING)
-        print("playing")
         return pipeline
 
 
 # Clear any existing sockets before creating new ones
-for socket in [socket_rgb_path, socket_depth_path]:
+for socket in [SOCKET_RGB_PATH, SOCKET_DEPTH_PATH]:
     if os.path.exists(socket):
         os.remove(socket)
 
 
-pipeline = build_pipeline()
+oakd_pipeline = build_processing_pipeline()
 
 # Start the RTSP server
-server = RTSPServer()
+rtsp_server = RTSPServer()
 
 while True:
     try:
-        with dai.Device(pipeline) as device:
+        with dai.Device(oakd_pipeline) as device:
             print('Connected to device!')
 
             # Output queue will be used to get the encoded data from the output defined above
@@ -114,16 +111,14 @@ while True:
             depth = device.getOutputQueue(name='depth', maxSize=30, blocking=True)
 
             print("RTSP stream available at rtsp://<server-ip>:8554/preview")
-            print("Press Ctrl+C to stop encoding...")
-
-
             print('Starting streaming of video data...')
+
             while True:
                 rgbData = rgb.get().getData()
                 depthData = depth.get().getData()
 
-                server.send_data('rgb', rgbData)
-                server.send_data('depth', depthData)
+                rtsp_server.send_data('rgb', rgbData)
+                rtsp_server.send_data('depth', depthData)
     except KeyboardInterrupt:
         # Keyboard interrupt (Ctrl + C) detected, ignore it
         pass

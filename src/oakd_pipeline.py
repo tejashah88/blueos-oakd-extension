@@ -1,6 +1,6 @@
 import depthai as dai
 
-def build_pipeline():
+def build_processing_pipeline():
     # Create pipeline
     pipeline = dai.Pipeline()
 
