@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 
 import os
+import time
 import threading
+
 
 import depthai as dai
 
@@ -91,7 +93,7 @@ class RTSPServer(GstRtspServer.RTSPServer):
         return pipeline
 
 
-
+# Clear any existing sockets before creating new ones
 for socket in [socket_rgb_path, socket_depth_path]:
     if os.path.exists(socket):
         os.remove(socket)
@@ -102,53 +104,36 @@ pipeline = build_pipeline()
 # Start the RTSP server
 server = RTSPServer()
 
-
-initialized = False
-device = None
-
-while not initialized:
+while True:
     try:
-        # Connect to device and start pipeline
-        device = dai.Device(pipeline)
-        initialized = True
+        with dai.Device(pipeline) as device:
+            print('Connected to device!')
+
+            # Output queue will be used to get the encoded data from the output defined above
+            rgb = device.getOutputQueue(name='rgb', maxSize=30, blocking=True)
+            depth = device.getOutputQueue(name='depth', maxSize=30, blocking=True)
+
+            print("RTSP stream available at rtsp://<server-ip>:8554/preview")
+            print("Press Ctrl+C to stop encoding...")
+
+
+            print('Starting streaming of video data...')
+            while True:
+                rgbData = rgb.get().getData()
+                depthData = depth.get().getData()
+
+                server.send_data('rgb', rgbData)
+                server.send_data('depth', depthData)
+    except KeyboardInterrupt:
+        # Keyboard interrupt (Ctrl + C) detected, ignore it
+        pass
     except RuntimeError as ex:
-        if str(ex) == 'No available devices':
-            print('Unable to initialize OAK-D camera. Retrying...')
+        if 'No available devices' in str(ex):
+            print('Unable to initialize OAK-D camera')
+        elif 'Communication exception' in str(ex):
+            print('Lost connection to camera')
         else:
-            raise ex
+            print(ex)
 
-
-try:
-    # Output queue will be used to get the encoded data from the output defined above
-    rgb = device.getOutputQueue(name='rgb', maxSize=30, blocking=True)
-    depth = device.getOutputQueue(name='depth', maxSize=30, blocking=True)
-except RuntimeError as ex:
-    if str(ex) == 'No available devices':
-        print('Unable to initialize camera output streams. Closing...')
-        device.close()
-    else:
-        raise ex
-
-
-print("RTSP stream available at rtsp://<server-ip>:8554/preview")
-print("Press Ctrl+C to stop encoding...")
-
-try:
-    while True:
-        rgbData = rgb.get().getData()
-        depthData = depth.get().getData()
-
-        server.send_data('rgb', rgbData)
-        server.send_data('depth', depthData)
-except RuntimeError as ex:
-    if str(ex) == 'No available devices':
-        print('Lost connection to camera. Closing...')
-        device.close()
-    elif 'Communication exception' in str(ex):
-        print('Lost connection to camera. Closing...')
-        device.close()
-    else:
-        raise ex
-except KeyboardInterrupt:
-    # Keyboard interrupt (Ctrl + C) detected
-    pass
+        print('Restarting stream after 5 seconds...')
+        time.sleep(5)
