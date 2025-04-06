@@ -18,15 +18,14 @@ RUN apt-get update && \
         python3-gi
 
 # Install python dependencies
+COPY requirements.txt /requirements.txt
+
 RUN apt-get install -y ninja-build && \
-    pip install numpy PyGObject requests && \
-    apt-get auto-remove -y ninja-build
+    pip install -r /requirements.txt && \
+    apt auto-remove -y ninja-build
 
-# (Optional) Install Luxonis's DepthAI examples
-RUN git clone --depth 1 https://github.com/luxonis/depthai-experiments.git
-
+# Copy source code
 COPY src /src
-
 ENTRYPOINT ["python", "/src/stream.py"]
 
 LABEL version="1.0.0"
@@ -56,7 +55,7 @@ LABEL company='{\
         "name": "AIME - MATE ROV",\
         "email": "tbshah@csuchico.edu"\
     }'
-LABEL type="example"
+LABEL type="device-integration"
 LABEL readme='https://raw.githubusercontent.com/tejashah88/blueos-oakd-extension/{tag}/Readme.md'
 LABEL links='{\
         "website": "https://github.com/tejashah88/blueos-oakd-extension/",\
