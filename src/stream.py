@@ -3,6 +3,7 @@
 import os
 import time
 import threading
+import traceback
 
 
 import depthai as dai
@@ -96,29 +97,94 @@ for socket in [SOCKET_RGB_PATH, SOCKET_DEPTH_PATH]:
         os.remove(socket)
 
 
-oakd_pipeline = build_processing_pipeline()
+def detect_cameras(device_info):
+    camera_config = {}
 
-# Start the RTSP server
-rtsp_server = RTSPServer()
+    with dai.Device(device_info) as device:
+        available_cameras = device.getConnectedCameras()
+
+        camera_config['rgb'] = dai.CameraBoardSocket.RGB in available_cameras
+        camera_config['depth_left'] = dai.CameraBoardSocket.LEFT in available_cameras
+        camera_config['depth_right'] = dai.CameraBoardSocket.RIGHT in available_cameras
+
+    return camera_config
+
 
 while True:
-    try:
-        with dai.Device(oakd_pipeline) as device:
-            print('Connected to device!')
+    print('\n')
 
-            # Output queue will be used to get the encoded data from the output defined above
-            rgb = device.getOutputQueue(name='rgb', maxSize=30, blocking=True)
-            depth = device.getOutputQueue(name='depth', maxSize=30, blocking=True)
+    # Step 1: Find connected devices
+    print('1) Looking for DepthAI devices...')
+    camera_devices = dai.Device.getAllAvailableDevices()
+    if not camera_devices:
+        print('No DepthAI devices found! Restarting loop...')
+        time.sleep(1)
+        continue
+
+    device_info = camera_devices[0]
+    print(f'Detected device: {device_info.name}')
+
+    # Step 2: Recognize cameras on device
+    print('2) Recognizing cameras...')
+    camera_config = detect_cameras(device_info)
+
+    if not camera_config["rgb"] and not camera_config["depth_left"] and not camera_config["depth_right"]:
+        print('Unable to find any cameras on device! Restarting loop...')
+        time.sleep(1)
+        continue
+    else:
+        print('Detected Cameras:')
+        print(f' - RGB: {camera_config["rgb"]}')
+        print(f' - Depth (left): {camera_config["depth_left"]}')
+        print(f' - Depth (right): {camera_config["depth_right"]}')
+
+
+    # Step 3: Build pipeline based on found cameras
+    print('3) Building pipeline...')
+    try:
+        vision_pipeline = build_processing_pipeline(camera_config)
+    except Exception as ex:
+        print(f'Unable to build pipeline: {ex}')
+        traceback.print_exception(ex)
+        print('Restarting loop...')
+        continue
+
+    # Step 4: Start RTSP Server
+    print('4) Starting RTSP Server...')
+    rtsp_server = RTSPServer()
+
+    # Step 5: Starting vision data loop
+    print('5) Starting vision data loop...')
+    try:
+        print('5a) Connecting to device...')
+        with dai.Device(vision_pipeline) as device:
+            # Output queue(s) will be used to get the encoded data from the output defined above
+            outputQueueNames = device.getOutputQueueNames()
+
+            print('5b) Preparing output queues...')
+            rgbQ = device.getOutputQueue(
+                name='rgb',
+                maxSize=30,
+                blocking=True
+            ) if 'rgb' in outputQueueNames else None
+
+            depthQ = device.getOutputQueue(
+                name='depth',
+                maxSize=30,
+                blocking=True
+            ) if 'depth' in outputQueueNames else None
 
             print("RTSP stream available at rtsp://<server-ip>:8554/preview")
             print('Starting streaming of video data...')
 
             while True:
-                rgbData = rgb.get().getData()
-                depthData = depth.get().getData()
+                if rgbQ is not None and rgbQ.has():
+                    rgbData = rgbQ.get().getData()
+                    rtsp_server.send_data('rgb', rgbData)
 
-                rtsp_server.send_data('rgb', rgbData)
-                rtsp_server.send_data('depth', depthData)
+                if depthQ is not None and depthQ.has():
+                    depthData = depthQ.get().getData()
+                    rtsp_server.send_data('depth', depthData)
     except KeyboardInterrupt:
         # Keyboard interrupt (Ctrl + C) detected, ignore it
         pass
@@ -130,5 +196,5 @@ while True:
         else:
             print(ex)
 
-        print('Restarting stream after 5 seconds...')
+        print('Restarting loop after 5 seconds...')
         time.sleep(5)
