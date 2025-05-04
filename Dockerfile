@@ -22,7 +22,7 @@ COPY requirements.txt /requirements.txt
 
 RUN apt-get install -y ninja-build && \
     pip install -r /requirements.txt && \
-    apt auto-remove -y ninja-build
+    apt-get auto-remove -y ninja-build
 
 # Copy source code
 COPY src /src

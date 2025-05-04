@@ -13,7 +13,13 @@ Tweaks:
 
 ### For All Architectures (Recommended)
 ```bash
-docker buildx build --platform linux/arm/v7,linux/arm64/v8,linux/amd64 . -t tejashah88/blueos-oakd-ext:latest --output type=image,push=true
+# NOTE: Run this to setup QEMU stuff
+docker run --privileged --rm tonistiigi/binfmt --install all
+
+# NOTE: Run this to allow multi-arch builds. "multi-arch-builder" is an example name
+docker buildx create --use --name multi-arch-builder
+
+docker buildx build --platform linux/arm/v7,linux/arm64/v8,linux/amd64 . -t tejashah88/blueos-oakd-ext:latest --output type=image,push=false
 ```
 
 ### For Specific Architectures
@@ -50,5 +56,13 @@ docker buildx build --platform linux/amd64 . -t tejashah88/blueos-oakd-ext:lates
          "c 189:* rmw"
       ]
    }
-}```
+}
+```
+
 4. Click "Create" to pull the image
+
+## Updating the extension
+1. Enable "Pirate Mode"
+2. Go to http://192.168.2.2/tools/extensions-manager
+3. Click the "Edit" button on the "Oak-D Video Streams (Improved)" extension.
+4. Click the "Save" button to pull the latest version from Docker Cloud.
