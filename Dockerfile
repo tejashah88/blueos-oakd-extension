@@ -26,7 +26,9 @@ RUN apt-get install -y ninja-build && \
 
 # Copy source code
 COPY src /src
-ENTRYPOINT ["python", "/src/stream.py"]
+
+# Start the streaming service with unbuffered I/O ('-u')
+ENTRYPOINT ["python", "-u", "/src/stream.py"]
 
 LABEL version="1.0.0"
 LABEL permissions='\

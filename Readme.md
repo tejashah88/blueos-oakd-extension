@@ -4,7 +4,7 @@ This extension is a [fork of Willian Galvani's Oakd-extension project](https://g
 
 Tweaks:
 - Added debugging messages and proper handling of missing Oak-D device
-- Cleaned up formatting
+- Added support for viewing mono-camera feeds independently
 - Added reliable building for `linux/arm64/v8` thanks to QEMU binary injection in the `Dockerfile`
   - Would sometimes fail due to "Segmentation fault" from the `ninja-build` dependency (cause is unknown at the moment)
 - Added Github Action for deployment to Docker Hub, with retry logic if builds intermittently failed
